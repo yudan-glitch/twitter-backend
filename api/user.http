@@ -1,0 +1,19 @@
+### Variables
+@baseUrl = http://localhost:8080/api/v1
+@name = alice
+
+### Get user by name
+GET {{baseUrl}}/users/{{name}}
+Accept: application/json
+
+### get user by name (non-existent user)
+GET {{baseUrl}}/users/unknown_user
+Accept: application/json
+
+### Get user by name (invalid username: too short)
+GET {{baseUrl}}/users/u
+Accept: application/json
+
+### Get user by name (invalid username: too long)
+GET {{baseUrl}}/users/user_12372659816428597261598762
+Accept: application/json
