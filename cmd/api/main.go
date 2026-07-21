@@ -1,34 +1,56 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
 
-	"github.com/yudan-glitch/twitter-backend/internal/domain"
 	"github.com/yudan-glitch/twitter-backend/internal/handlers"
-	"github.com/yudan-glitch/twitter-backend/internal/storage/mock"
+	"github.com/yudan-glitch/twitter-backend/internal/storage/postgres"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
-	// 1. Have yet to implement a real database. So, for now create an
-	// instance of the mock database in memory and seed it with
-	// temporary users for testing.
-	runtimeStore := &mock.MockUserStore{
-		Users: map[string]domain.User{
-			"susan":  {Username: "alice", Email: "alice@example.com"},
-			"jessie": {Username: "jessie", Email: "jessie@example.com"},
-		},
+
+	// 1. Parse configuration from standard environment variables
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("CRITICAL: DATABASE_URL environment variable is not set")
 	}
 
-	// 2. Setup standard library multiplexer router
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Fallback to safe default port
+	}
+
+	// 2. Open a connection pool to the database
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("CRITICAL: Failed to initialize database connection: %v", err)
+	}
+	// When opening a connection to a db, it is good practice to close it once done
+	defer db.Close()
+
+	// 3. Ping the database to confirm the network connection works properly (Health Check)
+	if err := db.Ping(); err != nil {
+		log.Fatalf("CRITICAL: Database connection is dead: %v", err)
+	}
+	log.Println("Database connection pool successfully verified.")
+
+	// 4. Initialize the real PostgreSQL store implementation adapter
+	userStore := postgres.NewPostgreSQLUserStore(db)
+
+	// 5. Initialize standard library serve mux router
 	mux := http.NewServeMux()
 
-	// 3. Inject mock database dependency into the handler.
-	mux.HandleFunc("GET /api/v1/users/{name}", handlers.HandleGetSpecificUser(runtimeStore))
+	// 6. Inject the production PostgreSQL store dependency into the standard library router
+	mux.HandleFunc("GET /api/v1/users/{name}", handlers.HandleGetSpecificUser(userStore))
 
-	// 4. Start the live local server
+	// 7. Start the live local server
 	log.Println("Server is running on http://localhost:8080...")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		log.Fatalf("could not start server: %v", err)
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
+		log.Fatalf("CRITICAL: Server crashed: %v", err)
 	}
 }

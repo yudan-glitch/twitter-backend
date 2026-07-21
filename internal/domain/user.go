@@ -1,13 +1,16 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // Core business User model (No HTTP/JSON specifics)
 type User struct {
 	ID        int64
 	Username  string
 	Email     string
-	CreatedAt string
+	CreatedAt time.Time
 }
 
 // Core business errors
