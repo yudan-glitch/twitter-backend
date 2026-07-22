@@ -7,22 +7,65 @@ package postgres
 
 import (
 	"context"
+	"time"
 )
 
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (username, email, password_hash)
+VALUES ($1, $2, $3)
+RETURNING id, username, email, password_hash, created_at
+`
+
+type CreateUserParams struct {
+	Username     string
+	Email        string
+	PasswordHash string
+}
+
+type CreateUserRow struct {
+	ID           int64
+	Username     string
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRowContext(ctx, createUser, arg.Username, arg.Email, arg.PasswordHash)
+	var i CreateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
-SELECT id, username, email, created_at
+SELECT id, username, email, password_hash, created_at
 FROM users 
 WHERE username = $1
 LIMIT 1
 `
 
-func (q *Queries) GetUser(ctx context.Context, username string) (User, error) {
+type GetUserRow struct {
+	ID           int64
+	Username     string
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
+}
+
+func (q *Queries) GetUser(ctx context.Context, username string) (GetUserRow, error) {
 	row := q.db.QueryRowContext(ctx, getUser, username)
-	var i User
+	var i GetUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.Email,
+		&i.PasswordHash,
 		&i.CreatedAt,
 	)
 	return i, err

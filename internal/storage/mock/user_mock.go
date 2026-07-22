@@ -1,6 +1,8 @@
 package mock
 
 import (
+	"time"
+
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 )
 
@@ -18,4 +20,29 @@ func (m *MockUserStore) GetUser(name string) (domain.User, error) {
 		return domain.User{}, domain.ErrUserNotFound
 	}
 	return user, nil
+}
+
+func (m *MockUserStore) CreateUser(user *domain.User) error {
+
+	// If a user with the provided name already exists:
+	_, exist := m.Users[user.Username]
+	if exist {
+		return domain.ErrUsernameTaken
+	}
+
+	// If it doesn't, check if the email is already taken
+	for _, usr := range m.Users {
+		if usr.Email == user.Email {
+			return domain.ErrEmailTaken
+		}
+	}
+
+	// Simulate database identity column index generation increment
+	user.ID = int64(len(m.Users) + 1)
+
+	user.CreatedAt = time.Now()
+
+	// Save the copy directly into the in-memory key-value dictionary
+	m.Users[user.Username] = *user
+	return nil
 }

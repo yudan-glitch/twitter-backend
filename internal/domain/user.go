@@ -7,16 +7,19 @@ import (
 
 // Core business User model (No HTTP/JSON specifics)
 type User struct {
-	ID        int64
-	Username  string
-	Email     string
-	CreatedAt time.Time
+	ID           int64
+	Username     string
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
 }
 
 // Core business errors
 var (
 	ErrUserNotFound   = errors.New("user not found")
 	ErrInternalServer = errors.New("internal server error")
+	ErrUsernameTaken  = errors.New("username already taken")
+	ErrEmailTaken     = errors.New("email already registered")
 )
 
 // Create a blueprint (an interface) of what the database should do
@@ -28,4 +31,5 @@ var (
 // UserStore provides access to user data (implemented by both the real DB and testing mocks).
 type UserStore interface {
 	GetUser(name string) (User, error)
+	CreateUser(user *User) error
 }
