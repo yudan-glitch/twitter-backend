@@ -2,7 +2,6 @@ package postgres_test
 
 import (
 	"database/sql"
-	"errors"
 	"os"
 	"testing"
 
@@ -24,29 +23,32 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 		expectedErr    error
 	}{
 		{
-			name:           "Request non-existing user",
+			// Start from lazy case
+			name:           "(1) Request non-existing user",
 			lookupUsername: "unknown",
 			expectedErr:    domain.ErrUserNotFound,
 		},
 		{
-			name:           "Request existing user",
+			name:           "(2) Request existing user",
 			lookupUsername: "alice",
 			expectedUser: domain.User{
+				ID:           1,
 				Username:     "alice",
 				Email:        "alice@example.com",
 				PasswordHash: "1234",
+				// CreatedAt doesn't really matter here.
+				// "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP" automatically
+				// sets a time when the row gets inserted. So this value will never be zero.
 			},
 			expectedErr: nil,
 		},
 	}
 
 	// Seed a real row into PostgreSQL
-	// log.Println("--- DEBUG: About to insert Alice ---")
 	_, err := db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "alice", "alice@example.com", "1234")
 	if err != nil {
 		t.Fatalf("failed to seed test user\n%v", err)
 	}
-	// // log.Println("--- DEBUG: Alice successfully inserted ---")
 
 	// // DEBUG
 	// var count int
@@ -60,7 +62,7 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := store.GetUser(tc.lookupUsername)
 			if err != tc.expectedErr {
-				t.Fatalf("Expected %v\nGot %v", tc.expectedErr, err)
+				t.Fatalf("bad return error\nExpected %v\nGot %v", tc.expectedErr, err)
 			}
 
 			if err == nil {
@@ -76,77 +78,65 @@ func TestPostgreSQLUserStore_CreateUser_Success(t *testing.T) {
 	// Good practice to close it once done
 	defer db.Close()
 
-	// Make it a pointer here
-	input := &domain.User{
-		// ID and CreatedAt should be automatically set (NOT TRUE!!!!, it gives default values)
-		Username:     "new_user",
-		Email:        "newmail@example.com",
-		PasswordHash: "password",
-	}
-
-	err := store.CreateUser(input)
-	if err != nil {
-		t.Fatal("expecting nil, got error")
-	}
-
-	stored, err := store.GetUser(input.Username)
-	if err != nil {
-		t.Fatalf("created user insertion failed\n%v", err)
-	}
-
-	assertUserMatches(t, input, &stored)
-}
-
-func TestPostgreSQLUserStore_CreateUser_Duplicate(t *testing.T) {
-	db, store := setupTestDB(t)
-	defer db.Close()
-
-	_, err := db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "alice", "alice@example.com", "1234")
+	// Define db for testing
+	_, err := db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "unique", "unique@example.com", "secret_hash")
 	if err != nil {
 		t.Fatalf("failed to seed test user\n%v", err)
 	}
 
-	// Real-World Application Note
-	// If the goal is to show both errors to a client in an API response simultaneously
-	// (e.g., "Username is taken" AND "Email is taken"), that logic cannot live in the
-	// low-level database storage layer. Instead, handle that later up in the HTTP Handler
-	// layer by performing rapid, non-blocking check queries before attempting the insert,
-	// or by prioritizing the username message return rule.
+	// Define test cases (Table-Driven Test)
+	tests := []struct {
+		name        string
+		inputUser   domain.User
+		expectedErr error
+	}{
+		{
+			name: "(1) Duplicate Username",
+			inputUser: domain.User{
+				Username:     "unique",
+				Email:        "different@example.com",
+				PasswordHash: "secret_hash",
+			},
+			expectedErr: domain.ErrUsernameTaken,
+		},
+		{
+			name: "(2) Duplicate Email",
+			inputUser: domain.User{
+				Username:     "different",
+				Email:        "unique@example.com",
+				PasswordHash: "secret_hash",
+			},
+			expectedErr: domain.ErrEmailTaken,
+		},
+		{
+			name: "(3) Valid input registration",
+			inputUser: domain.User{
+				Username:     "different",
+				Email:        "different@example.com",
+				PasswordHash: "secret_hash",
+			},
+			expectedErr: nil,
+		},
+	}
 
-	t.Run("Duplicate username", func(t *testing.T) {
-		input := &domain.User{
-			Username:     "alice",
-			Email:        "aliceeee@example.com",
-			PasswordHash: "password",
-		}
-		err = store.CreateUser(input)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := store.CreateUser(&tc.inputUser)
+			if err != tc.expectedErr {
+				t.Fatalf("create user: bad return error\nExpected %v\nGot %v", tc.expectedErr, err)
+			}
 
-		if err == nil {
-			t.Errorf("Expected error, got nil\n%v", err)
-		}
+			// Check if user was registered correctly
+			if err == nil {
+				stored, err := store.GetUser(tc.inputUser.Username)
+				if err != nil {
+					t.Fatalf("get user: bad return error\nExpecting nil\nGot %v", err)
+				}
 
-		if !errors.Is(err, domain.ErrUsernameTaken) {
-			t.Errorf("Expected %v\nGot %v", domain.ErrUsernameTaken, err)
-		}
-	})
-
-	t.Run("Duplicate email", func(t *testing.T) {
-		input := &domain.User{
-			Username:     "aliceeee",
-			Email:        "alice@example.com",
-			PasswordHash: "password",
-		}
-		err = store.CreateUser(input)
-
-		if err == nil {
-			t.Errorf("Expected error, got nil\n%v", err)
-		}
-
-		if !errors.Is(err, domain.ErrEmailTaken) {
-			t.Errorf("Expected %v\nGot %v", domain.ErrEmailTaken, err)
-		}
-	})
-
+				assertUserMatches(t, &tc.inputUser, &stored)
+			}
+		})
+	}
 }
 
 func setupTestDB(t testing.TB) (*sql.DB, *postgres.PostgreSQLUserStore) {
@@ -168,6 +158,7 @@ func setupTestDB(t testing.TB) (*sql.DB, *postgres.PostgreSQLUserStore) {
 		t.Fatalf("failed to connect to test db: %v", err)
 	}
 
+	// Clean users table from previous tests
 	_, err = db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
 	if err != nil {
 		db.Close()
@@ -185,7 +176,7 @@ func assertUserMatches(t testing.TB, expected, got *domain.User) {
 	if expected.ID != 0 {
 		// If the test specified an exact ID, they must match perfectly
 		if got.ID != expected.ID {
-			t.Errorf("mismatch on field ID: expected %d, got %d", expected.ID, got.ID)
+			t.Errorf("mismatch on field ID\nExpected %d\nGot %d", expected.ID, got.ID)
 		}
 	} else {
 		// If the test left ID as 0, just make sure the database populated something
@@ -196,29 +187,22 @@ func assertUserMatches(t testing.TB, expected, got *domain.User) {
 
 	// Username Matching
 	if expected.Username != got.Username {
-		t.Errorf("Expected username %q\nGot %q", expected.Username, got.Username)
+		t.Errorf("mismatch on field Username\nExpected %q\nGot %q", expected.Username, got.Username)
 	}
 
 	// Email Matching
 	if expected.Email != got.Email {
-		t.Errorf("Expected email %q\nGot %q", expected.Email, got.Email)
+		t.Errorf("mismatch of field Email\nExpected%q\nGot %q", expected.Email, got.Email)
 	}
 
 	// Password Hash Matching
 	if expected.PasswordHash != got.PasswordHash {
-		t.Errorf("Expected password hash %q\nGot %q", expected.PasswordHash, got.PasswordHash)
+		t.Errorf("mismatch on field PasswordHash\nExpected %q\nGot %q", expected.PasswordHash, got.PasswordHash)
 	}
 
 	// Created At Validation
-	// Dynamic validation rule: If the test defines a timestamp, match them exactly.
-	// Otherwise, simply assert that the database returned a non-zero time entry.
-	if !expected.CreatedAt.IsZero() {
-		if !got.CreatedAt.Equal(expected.CreatedAt) {
-			t.Errorf("mismatch on field CreatedAt: expected %v, got %v", expected.CreatedAt, got.CreatedAt)
-		}
-
-		// If PostgreSQL successfully saved the timestamp, got.CreatedAt will contain a real time value (e.g., 2026-07-22...)
-	} else if got.CreatedAt.IsZero() {
+	// Assert that the database returned a non-zero time entry.
+	if got.CreatedAt.IsZero() {
 		t.Error("expected stored created_at timestamp to be populated, got a zero time value")
 	}
 }

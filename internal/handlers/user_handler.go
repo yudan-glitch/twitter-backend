@@ -10,8 +10,10 @@ import (
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 )
 
-// ErrInvalidUsername indicates that the provided username violates validation constraints.
-var ErrInvalidUsername = errors.New("invalid username")
+var (
+	// ErrInvalidUsername indicates that the provided username violates validation constraints.
+	ErrInvalidUsername = errors.New("invalid username")
+)
 
 // UserResponse is the clean, public Data Transfer Object (DTO).
 // It only includes fields that are 100% safe to send over the network.
@@ -50,7 +52,7 @@ func HandleGetSpecificUser(store domain.UserStore) http.HandlerFunc {
 			// Else it's a database error. Log the real technical error internally...
 			log.Printf("Database failure: %v", err)
 			// ...but hide the raw error from the public client.
-			respondWithError(w, http.StatusInternalServerError, domain.ErrInternalServer)
+			respondWithError(w, http.StatusInternalServerError, err)
 			return
 		}
 

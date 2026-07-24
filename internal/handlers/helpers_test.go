@@ -25,6 +25,7 @@ func assertUserResponse(expectedUsername string) func(*testing.T, *httptest.Resp
 
 		got := decodeJSON[handlers.UserResponse](t, w.Body)
 
+		// Assertions
 		if got.Username != expectedUsername {
 			t.Errorf("bad user response\nExpected username %q\nGot %q", expectedUsername, got.Username)
 		}
@@ -39,6 +40,7 @@ func assertErrorResponse(expectedError error) func(*testing.T, *httptest.Respons
 
 		got := decodeJSON[handlers.ErrorResponse](t, w.Body)
 
+		// Assertions
 		if got.Error != handlers.GetClientErrorMessage(expectedError) {
 			t.Errorf("bad error response\nExpected %q\nGot %q", handlers.GetClientErrorMessage(expectedError), got.Error)
 		}

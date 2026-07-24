@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/lib/pq"
@@ -30,7 +31,7 @@ func (s *PostgreSQLUserStore) GetUser(name string) (domain.User, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.User{}, domain.ErrUserNotFound
 		}
-		return domain.User{}, domain.ErrInternalServer
+		return domain.User{}, fmt.Errorf("get user %q: %w", name, err)
 	}
 
 	// 2. Map the database model directly to the pure domain entity
