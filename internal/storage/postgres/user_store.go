@@ -64,6 +64,7 @@ func (s *PostgreSQLUserStore) CreateUser(user *domain.User) error {
 				return domain.ErrEmailTaken
 			}
 		}
+		// Real DB failure
 		return err
 	}
 

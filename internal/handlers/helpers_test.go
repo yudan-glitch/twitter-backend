@@ -42,7 +42,7 @@ func assertErrorResponse(expectedError error) func(*testing.T, *httptest.Respons
 
 		// Assertions
 		if got.Error != handlers.GetClientErrorMessage(expectedError) {
-			t.Errorf("bad error response\nExpected %q\nGot %q", handlers.GetClientErrorMessage(expectedError), got.Error)
+			t.Errorf("bad client error response\nExpected %q\nGot %q", handlers.GetClientErrorMessage(expectedError), got.Error)
 		}
 	}
 }

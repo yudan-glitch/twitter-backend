@@ -47,6 +47,7 @@ func main() {
 
 	// 6. Inject the production PostgreSQL store dependency into the standard library router
 	mux.HandleFunc("GET /api/v1/users/{name}", handlers.HandleGetSpecificUser(userStore))
+	mux.HandleFunc("POST /api/v1/users", handlers.HandleCreateUser(userStore))
 
 	// 7. Start the live local server
 	log.Println("Server is running on http://localhost:8080...")

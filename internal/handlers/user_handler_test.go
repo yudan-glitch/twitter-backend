@@ -4,9 +4,12 @@
 package handlers_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 	"github.com/yudan-glitch/twitter-backend/internal/handlers"
@@ -92,4 +95,139 @@ func TestHandleGetSpecificUser(t *testing.T) {
 			tc.assert(t, w)
 		})
 	}
+}
+
+func TestHandleCreateUser(t *testing.T) {
+
+	// Define multiple test cases (Table-Driven Test)
+	tests := []struct {
+		name         string
+		userPayload  handlers.UserRequest
+		expectedCode int
+		assert       func(t *testing.T, w *httptest.ResponseRecorder)
+	}{
+		{
+			name: "(1) Valid Input Registration",
+			// Prepare the payload data (DTO)
+			userPayload: handlers.UserRequest{
+				Username: "maya",
+				Email:    "maya@example.com",
+				Password: "1234",
+			},
+			expectedCode: http.StatusCreated,
+			assert:       assertUserResponse("maya"),
+		},
+		{
+			name: "(2) Duplicate username",
+			userPayload: handlers.UserRequest{
+				Username: "unique",
+				Email:    "different@example.com",
+				Password: "1234",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(domain.ErrUsernameTaken),
+		},
+		{
+			name: "(3) Duplicate email",
+			userPayload: handlers.UserRequest{
+				Username: "different",
+				Email:    "unique@example.com",
+				Password: "1234",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(domain.ErrEmailTaken),
+		},
+		{
+			name: "(4) Invalid username",
+			userPayload: handlers.UserRequest{
+				Username: "a",
+				Email:    "aaaaaaaaaa@example.com",
+				Password: "1234",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
+		},
+		{
+			name: "(5) Invalid email",
+			userPayload: handlers.UserRequest{
+				Username: "valid",
+				Email:    "validexample.com",
+				Password: "1234",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidEmail),
+		},
+		{
+			name: "(5) Invalid password",
+			userPayload: handlers.UserRequest{
+				Username: "valid",
+				Email:    "valide@example.com",
+				Password: "",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidPassword),
+		},
+	}
+
+	// Contstruct full versioned API path
+	route := apiVersion + "/users"
+
+	// Run each test
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			// Define in-memory db for testing **per subtest**
+			mockStore := mock.MockUserStore{
+				Users: map[string]domain.User{
+					"unique": {
+						ID:           1,
+						Username:     "unique",
+						Email:        "unique@example.com",
+						PasswordHash: "secret_hash",
+						CreatedAt:    time.Now(),
+					},
+				},
+			}
+
+			// ---------------
+			// --- REQUEST ---
+			// ---------------
+			// 1. Create a buffer to hold the encoded JSON bytes
+			requestBodyBuffer := new(bytes.Buffer)
+
+			// 2. Encode the data into the buffer
+			err := json.NewEncoder(requestBodyBuffer).Encode(tc.userPayload)
+			if err != nil {
+				t.Fatalf("error encoding user payload: %v", err)
+			}
+
+			// 3. Simulate browser request and server response
+			w := httptest.NewRecorder()
+			// Pass the buffer (which is an io.Reader) into the request
+			r := httptest.NewRequest(http.MethodPost, route, requestBodyBuffer)
+			r.Header.Set("Content-Type", "application/json")
+
+			// ----------------
+			// --- RESPONSE ---
+			// ----------------
+			// // Try fetch the user
+			// // Note: not wrong, but it adds noise and duplicated knowledge.
+			// //       Handler test should focus on HTTP response; store setup
+			// //       can be implicit in the seed map
+
+			// _, err = mockStore.GetUser(tc.userPayload.Username)
+			// if err != tc.expectedGetUserErr {
+			// 	t.Fatalf("get user: bad return error\nExpected %v\nGot %v", tc.expectedGetUserErr, err)
+			// }
+
+			// 1. Call Create User Handler
+			handler := handlers.HandleCreateUser(&mockStore)
+			handler.ServeHTTP(w, r)
+
+			// 2. Assertions
+			assertCode(t, tc.expectedCode, w.Code)
+			tc.assert(t, w)
+		})
+	}
+
 }
