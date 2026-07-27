@@ -7,17 +7,48 @@ import (
 	"log"
 	"net/http"
 	"net/mail"
+	"regexp"
+	"strings"
 
 	"github.com/yudan-glitch/twitter-backend/internal/auth"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 )
 
 var (
-	// ErrInvalidUsername indicates that the provided username violates validation constraints.
 	ErrInvalidUsername = errors.New("invalid username")
 	ErrInvalidEmail    = errors.New("invalid email")
 	ErrInvalidPassword = errors.New("invalid password")
+
+	// ErrPayloadTooLarge is returned when the request body exceeds the limit.
+	ErrPayloadTooLarge = errors.New("request body too large")
+
+	// ErrUnknownFields is returned when the JSON contains fields not in the DTO.
+	ErrUnknownFields = errors.New("request body contains unknown fields")
 )
+
+// Regex Breakdown:
+// ^[a-zA-Z0-9]      -> Must start with 1 alphanumeric character
+// [a-zA-Z0-9_]{2,13} -> Middle chunk can include underscores, length 2 to 13
+// [a-zA-Z0-9]$      -> Must end with 1 alphanumeric character
+// Total length: 1 + (2 to 13) + 1 = 4 to 15 characters
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_]{2,13}[a-zA-Z0-9]$`)
+
+func isValidUsername(username string) bool {
+	return usernameRegex.MatchString(username)
+}
+
+func isValidEmail(email string) bool {
+	// Too Long (The maximum length defined by RFC 5321 is 254 characters)
+	if len(email) > 254 {
+		return false
+	}
+	// Invalid Syntax
+	_, err := mail.ParseAddress(email)
+	if err != nil {
+		return false
+	}
+	return true
+}
 
 // UserResponse is the clean, public Data Transfer Object (DTO).
 // It only includes fields that are 100% safe to send over the network.
@@ -31,6 +62,8 @@ type UserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+
+const maxRequestBodySize = 1024 * 1024 // 1MB
 
 // HandleGetSpecificUser takes a 'store' (database layer) and returns an HTTP
 // handler function that fetches a single user by name.
@@ -77,31 +110,49 @@ func HandleGetSpecificUser(store domain.UserStore) http.HandlerFunc {
 func HandleCreateUser(store domain.UserStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
+		// Limit the size of the request body to prevent DOS
+		r.Body = http.MaxBytesReader(w, r.Body, int64(maxRequestBodySize))
+
 		// Decode user payload
 		var incomingUserData UserRequest
-		err := json.NewDecoder(r.Body).Decode(&incomingUserData)
+		decoder := json.NewDecoder(r.Body)
+		// Prevent DOS via unknown large fields
+		decoder.DisallowUnknownFields()
+
+		err := decoder.Decode(&incomingUserData)
 		if err != nil {
+			var maxBytesErr *http.MaxBytesError
+			if errors.As(err, &maxBytesErr) {
+				// Internal: http.MaxBytesError -> Client: ErrPayloadTooLarge
+				respondWithError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge)
+				return
+			}
+
+			// Check if error is due to DisallowUnknownFields
+			if strings.Contains(err.Error(), "unknown field") {
+				respondWithError(w, http.StatusBadRequest, ErrUnknownFields)
+				return
+			}
+
 			respondWithError(w, http.StatusBadRequest, err)
 			return
 		}
 
 		// Payload Validation:
-		// Username
-		lenUsername := len(incomingUserData.Username)
-		if lenUsername < 3 || lenUsername > 20 {
+		// Username (4-15 characters)
+		if !isValidUsername(incomingUserData.Username) {
 			respondWithError(w, http.StatusBadRequest, ErrInvalidUsername)
 			return
 		}
 
 		// Email
-		_, err = mail.ParseAddress(incomingUserData.Email)
-		if err != nil {
+		if !isValidEmail(incomingUserData.Email) {
 			respondWithError(w, http.StatusBadRequest, ErrInvalidEmail)
 			return
 		}
 
-		// Password
-		if len(incomingUserData.Password) == 0 {
+		// Password too short (at least 6 characters)
+		if len(incomingUserData.Password) < 6 {
 			respondWithError(w, http.StatusBadRequest, ErrInvalidPassword)
 			return
 		}
@@ -168,12 +219,21 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, response any) {
 // GetClientErrorMessage translates internal backend errors to user-friendly strings.
 func GetClientErrorMessage(err error) string {
 	switch {
+	// User Request Fields
 	case errors.Is(err, ErrInvalidUsername):
-		// I will eventually add more input constraints e.g. allowing only specific characters.
 		return "The username must be between 3 and 20 characters long. Please provide a valid username."
 	case errors.Is(err, ErrInvalidEmail):
 		return "Invalid email. Please try again with a different email."
+	case errors.Is(err, ErrInvalidPassword):
+		return "Password must contain at least 6 characters. Please try again with a different password."
 
+	// Payload
+	case errors.Is(err, ErrPayloadTooLarge):
+		return "The request payload is too large. Max size is 1MB."
+	case errors.Is(err, ErrUnknownFields):
+		return "The request contains fields that are not allowed."
+
+	// Domain
 	case errors.Is(err, domain.ErrUserNotFound):
 		return "We couldn't find an account matching that username. Please verify the spelling and try again."
 	case errors.Is(err, domain.ErrUsernameTaken):

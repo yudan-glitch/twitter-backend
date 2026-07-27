@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,59 +111,92 @@ func TestHandleCreateUser(t *testing.T) {
 			name: "(1) Valid Input Registration",
 			// Prepare the payload data (DTO)
 			userPayload: handlers.UserRequest{
-				Username: "maya",
+				Username: "maya_02",
 				Email:    "maya@example.com",
-				Password: "1234",
+				Password: "123456",
 			},
 			expectedCode: http.StatusCreated,
-			assert:       assertUserResponse("maya"),
+			assert:       assertUserResponse("maya_02"),
 		},
 		{
-			name: "(2) Duplicate username",
+			name: "(2a) Duplicate: username",
 			userPayload: handlers.UserRequest{
 				Username: "unique",
 				Email:    "different@example.com",
-				Password: "1234",
+				Password: "123456",
 			},
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(domain.ErrUsernameTaken),
 		},
 		{
-			name: "(3) Duplicate email",
+			name: "(2b) Duplicate: email",
 			userPayload: handlers.UserRequest{
 				Username: "different",
 				Email:    "unique@example.com",
-				Password: "1234",
+				Password: "123456",
 			},
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(domain.ErrEmailTaken),
 		},
 		{
-			name: "(4) Invalid username",
+			name: "(3a) Invalid username: too short",
 			userPayload: handlers.UserRequest{
-				Username: "a",
-				Email:    "aaaaaaaaaa@example.com",
-				Password: "1234",
+				Username: "usr",
+				Email:    "valid@example.com",
+				Password: "123456",
 			},
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
 		},
 		{
-			name: "(5) Invalid email",
+			name: "(3b) Invalid username: too long",
+			userPayload: handlers.UserRequest{
+				Username: "usernametooloooong",
+				Email:    "valid@example.com",
+				Password: "123456",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
+		},
+		{
+			name: "(3c) Invalid username: regex violation",
+			userPayload: handlers.UserRequest{
+				Username: "_user_",
+				Email:    "valid@example.com",
+				Password: "123456",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
+		},
+		{
+			name: "(4a) Invalid email: invalid syntax",
 			userPayload: handlers.UserRequest{
 				Username: "valid",
-				Email:    "validexample.com",
-				Password: "1234",
+				Email:    "validexampledotcom",
+				Password: "123456",
 			},
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidEmail),
 		},
 		{
-			name: "(5) Invalid password",
+			name: "(4b) Invalid email: too long",
+			userPayload: handlers.UserRequest{
+				Username: "valid",
+				Email: "qmvpeimvqpnvepqnveqienvoasjdpwmfoqijeoiqjefoiwqoifjowqjfowqjfoiwqjfo" +
+					"iqjwfoijqwofijqwoijfoiwqjfoiwqjfoijwfpqiwnpwqingpqingpiqnegpqinepinqeog" +
+					"iewqeinvoqinefjqeinfoqenfoqinfiqnwfoiqneoineqfnqonfnwqinfvoqienvoqiqwmc" +
+					"monqiwnvoiqnvoiqnevoneqvoinqeoinoivqnnennvqie@example.com",
+				Password: "123456",
+			},
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidEmail),
+		},
+		{
+			name: "(5) Invalid password: too short",
 			userPayload: handlers.UserRequest{
 				Username: "valid",
 				Email:    "valide@example.com",
-				Password: "",
+				Password: "12345",
 			},
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidPassword),
@@ -210,15 +244,6 @@ func TestHandleCreateUser(t *testing.T) {
 			// ----------------
 			// --- RESPONSE ---
 			// ----------------
-			// // Try fetch the user
-			// // Note: not wrong, but it adds noise and duplicated knowledge.
-			// //       Handler test should focus on HTTP response; store setup
-			// //       can be implicit in the seed map
-
-			// _, err = mockStore.GetUser(tc.userPayload.Username)
-			// if err != tc.expectedGetUserErr {
-			// 	t.Fatalf("get user: bad return error\nExpected %v\nGot %v", tc.expectedGetUserErr, err)
-			// }
 
 			// 1. Call Create User Handler
 			handler := handlers.HandleCreateUser(&mockStore)
@@ -230,4 +255,37 @@ func TestHandleCreateUser(t *testing.T) {
 		})
 	}
 
+}
+
+func TestHandleCreateUser_PayloadLimits(t *testing.T) {
+	route := apiVersion + "/users"
+	mockStore := &mock.MockUserStore{}
+
+	t.Run("Reject massive payloads", func(t *testing.T) {
+		// Create a body that starts as valid JSON but is very long
+		// This forces the decoder to keep reading until it hits the limit.
+		hugeValue := strings.Repeat("a", 1024*1024+100)
+		bodyString := `{"username":"` + hugeValue + `"}`
+		hugeBody := strings.NewReader(bodyString)
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, route, hugeBody)
+
+		handlers.HandleCreateUser(mockStore).ServeHTTP(w, r)
+
+		assertCode(t, http.StatusRequestEntityTooLarge, w.Code)
+		assertErrorResponse(handlers.ErrPayloadTooLarge)(t, w)
+	})
+
+	t.Run("Reject unknown JSON fields", func(t *testing.T) {
+		body := bytes.NewBufferString(`{"username":"bob","email":"b@b.com","password":"password123","hacker_field":"inject"}`)
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, route, body)
+
+		handlers.HandleCreateUser(mockStore).ServeHTTP(w, r)
+
+		assertCode(t, http.StatusBadRequest, w.Code)
+		assertErrorResponse(handlers.ErrUnknownFields)(t, w)
+	})
 }
