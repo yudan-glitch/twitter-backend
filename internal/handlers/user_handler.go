@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/mail"
 
+	"github.com/yudan-glitch/twitter-backend/internal/auth"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 )
 
@@ -105,11 +106,18 @@ func HandleCreateUser(store domain.UserStore) http.HandlerFunc {
 			return
 		}
 
+		// Hash password before creating domain User
+		hashedPassword, err := auth.HashPassword(incomingUserData.Password)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err)
+			return
+		}
+
 		// Map UserRequest to domain User
 		user := domain.User{
 			Username:     incomingUserData.Username,
 			Email:        incomingUserData.Email,
-			PasswordHash: incomingUserData.Password,
+			PasswordHash: hashedPassword,
 		}
 
 		// Create the user

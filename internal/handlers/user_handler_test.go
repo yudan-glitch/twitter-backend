@@ -183,7 +183,7 @@ func TestHandleCreateUser(t *testing.T) {
 						ID:           1,
 						Username:     "unique",
 						Email:        "unique@example.com",
-						PasswordHash: "secret_hash",
+						PasswordHash: "dummy_bcrypt_hash",
 						CreatedAt:    time.Now(),
 					},
 				},
