@@ -33,23 +33,6 @@ var (
 // Total length: 1 + (2 to 13) + 1 = 4 to 15 characters
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_]{2,13}[a-zA-Z0-9]$`)
 
-func isValidUsername(username string) bool {
-	return usernameRegex.MatchString(username)
-}
-
-func isValidEmail(email string) bool {
-	// Too Long (The maximum length defined by RFC 5321 is 254 characters)
-	if len(email) > 254 {
-		return false
-	}
-	// Invalid Syntax
-	_, err := mail.ParseAddress(email)
-	if err != nil {
-		return false
-	}
-	return true
-}
-
 // UserResponse is the clean, public Data Transfer Object (DTO).
 // It only includes fields that are 100% safe to send over the network.
 // HTTP JSON payload shapes live here.
@@ -63,6 +46,23 @@ type UserRequest struct {
 	Password string `json:"password"`
 }
 
+func isValidUsername(u string) bool {
+	return usernameRegex.MatchString(u)
+}
+
+func isValidEmail(e string) bool {
+	// Too Long (The maximum length defined by RFC 5321 is 254 characters)
+	if len(e) > 254 {
+		return false
+	}
+	// Invalid Syntax
+	_, err := mail.ParseAddress(e)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
 const maxRequestBodySize = 1024 * 1024 // 1MB
 
 // HandleGetSpecificUser takes a 'store' (database layer) and returns an HTTP
@@ -74,7 +74,7 @@ func HandleGetSpecificUser(store domain.UserStore) http.HandlerFunc {
 		name := r.PathValue("name")
 
 		// 2. Validate username length constraints before querying.
-		if len(name) < 3 || len(name) > 20 {
+		if !isValidUsername(name) {
 			respondWithError(w, http.StatusBadRequest, ErrInvalidUsername)
 			return
 		}
@@ -84,6 +84,7 @@ func HandleGetSpecificUser(store domain.UserStore) http.HandlerFunc {
 		//       In production, it calls the real database.
 		user, err := store.GetUser(name)
 
+		// 4. Respond based on database response.
 		if err != nil {
 
 			// If user doesn't exist, return 404 Not Found.
@@ -221,7 +222,7 @@ func GetClientErrorMessage(err error) string {
 	switch {
 	// User Request Fields
 	case errors.Is(err, ErrInvalidUsername):
-		return "The username must be between 3 and 20 characters long. Please provide a valid username."
+		return "The username must be between 4 and 15 characters long. Please provide a valid username."
 	case errors.Is(err, ErrInvalidEmail):
 		return "Invalid email. Please try again with a different email."
 	case errors.Is(err, ErrInvalidPassword):

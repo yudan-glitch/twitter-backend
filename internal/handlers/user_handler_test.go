@@ -19,10 +19,12 @@ import (
 
 const apiVersion = "/api/v1"
 
+// --- Get User ---
+
 func TestHandleGetSpecificUser(t *testing.T) {
 
 	// 1. Define in-memory db for testing.
-	mockStore := mock.MockUserStore{
+	mockStore := &mock.MockUserStore{
 		Users: map[string]domain.User{
 			"alice":  {Username: "alice"},
 			"jessie": {Username: "jessie"},
@@ -88,7 +90,7 @@ func TestHandleGetSpecificUser(t *testing.T) {
 			r.SetPathValue("name", tc.username)
 
 			// Inject the mock into the handler
-			handler := handlers.HandleGetSpecificUser(&mockStore)
+			handler := handlers.HandleGetSpecificUser(mockStore)
 			handler.ServeHTTP(w, r) // The handler gets exectued here
 
 			// Assertions
@@ -96,6 +98,38 @@ func TestHandleGetSpecificUser(t *testing.T) {
 			tc.assert(t, w)
 		})
 	}
+}
+
+// --- Create User ---
+
+type userPayloadBuilder struct {
+	payload handlers.UserRequest
+}
+
+func newUserPayloadBuilder() *userPayloadBuilder {
+	return &userPayloadBuilder{
+		payload: handlers.UserRequest{
+			Username: "user_02",
+			Email:    "user@mail.com",
+			Password: "123abc",
+		},
+	}
+}
+
+func (b *userPayloadBuilder) withUsername(u string) *userPayloadBuilder {
+	b.payload.Username = u
+	return b
+}
+func (b *userPayloadBuilder) withEmail(e string) *userPayloadBuilder {
+	b.payload.Email = e
+	return b
+}
+func (b *userPayloadBuilder) withPassword(p string) *userPayloadBuilder {
+	b.payload.Password = p
+	return b
+}
+func (b *userPayloadBuilder) build() handlers.UserRequest {
+	return b.payload
 }
 
 func TestHandleCreateUser(t *testing.T) {
@@ -108,96 +142,56 @@ func TestHandleCreateUser(t *testing.T) {
 		assert       func(t *testing.T, w *httptest.ResponseRecorder)
 	}{
 		{
-			name: "(1) Valid Input Registration",
-			// Prepare the payload data (DTO)
-			userPayload: handlers.UserRequest{
-				Username: "maya_02",
-				Email:    "maya@example.com",
-				Password: "123456",
-			},
+			name:         "(1) Valid Input Registration",
+			userPayload:  newUserPayloadBuilder().build(),
 			expectedCode: http.StatusCreated,
-			assert:       assertUserResponse("maya_02"),
+			assert:       assertUserResponse("user_02"),
 		},
 		{
-			name: "(2a) Duplicate: username",
-			userPayload: handlers.UserRequest{
-				Username: "unique",
-				Email:    "different@example.com",
-				Password: "123456",
-			},
+			name:         "(2a) Duplicate: username",
+			userPayload:  newUserPayloadBuilder().withUsername("unique").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(domain.ErrUsernameTaken),
 		},
 		{
-			name: "(2b) Duplicate: email",
-			userPayload: handlers.UserRequest{
-				Username: "different",
-				Email:    "unique@example.com",
-				Password: "123456",
-			},
+			name:         "(2b) Duplicate: email",
+			userPayload:  newUserPayloadBuilder().withEmail("unique@mail.com").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(domain.ErrEmailTaken),
 		},
 		{
-			name: "(3a) Invalid username: too short",
-			userPayload: handlers.UserRequest{
-				Username: "usr",
-				Email:    "valid@example.com",
-				Password: "123456",
-			},
+			name:         "(3a) Invalid username: too short",
+			userPayload:  newUserPayloadBuilder().withUsername("usr").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
 		},
 		{
-			name: "(3b) Invalid username: too long",
-			userPayload: handlers.UserRequest{
-				Username: "usernametooloooong",
-				Email:    "valid@example.com",
-				Password: "123456",
-			},
+			name:         "(3b) Invalid username: too long",
+			userPayload:  newUserPayloadBuilder().withUsername("usernametoolongxx").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
 		},
 		{
-			name: "(3c) Invalid username: regex violation",
-			userPayload: handlers.UserRequest{
-				Username: "_user_",
-				Email:    "valid@example.com",
-				Password: "123456",
-			},
+			name:         "(3c) Invalid username: regex violation",
+			userPayload:  newUserPayloadBuilder().withUsername("_user_").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
 		},
 		{
-			name: "(4a) Invalid email: invalid syntax",
-			userPayload: handlers.UserRequest{
-				Username: "valid",
-				Email:    "validexampledotcom",
-				Password: "123456",
-			},
+			name:         "(4a) Invalid email: invalid syntax",
+			userPayload:  newUserPayloadBuilder().withEmail("validexampledotcom").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidEmail),
 		},
 		{
-			name: "(4b) Invalid email: too long",
-			userPayload: handlers.UserRequest{
-				Username: "valid",
-				Email: "qmvpeimvqpnvepqnveqienvoasjdpwmfoqijeoiqjefoiwqoifjowqjfowqjfoiwqjfo" +
-					"iqjwfoijqwofijqwoijfoiwqjfoiwqjfoijwfpqiwnpwqingpqingpiqnegpqinepinqeog" +
-					"iewqeinvoqinefjqeinfoqenfoqinfiqnwfoiqneoineqfnqonfnwqinfvoqienvoqiqwmc" +
-					"monqiwnvoiqnvoiqnevoneqvoinqeoinoivqnnennvqie@example.com",
-				Password: "123456",
-			},
+			name:         "(4b) Invalid email: too long",
+			userPayload:  newUserPayloadBuilder().withEmail("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.com").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidEmail),
 		},
 		{
-			name: "(5) Invalid password: too short",
-			userPayload: handlers.UserRequest{
-				Username: "valid",
-				Email:    "valide@example.com",
-				Password: "12345",
-			},
+			name:         "(5) Invalid password: too short",
+			userPayload:  newUserPayloadBuilder().withPassword("abc12").build(),
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidPassword),
 		},
@@ -211,45 +205,37 @@ func TestHandleCreateUser(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 
 			// Define in-memory db for testing **per subtest**
-			mockStore := mock.MockUserStore{
+			mockStore := &mock.MockUserStore{
 				Users: map[string]domain.User{
 					"unique": {
 						ID:           1,
 						Username:     "unique",
-						Email:        "unique@example.com",
+						Email:        "unique@mail.com",
 						PasswordHash: "dummy_bcrypt_hash",
 						CreatedAt:    time.Now(),
 					},
 				},
 			}
 
-			// ---------------
-			// --- REQUEST ---
-			// ---------------
-			// 1. Create a buffer to hold the encoded JSON bytes
+			// Create a buffer to hold the encoded JSON bytes
 			requestBodyBuffer := new(bytes.Buffer)
 
-			// 2. Encode the data into the buffer
+			// Encode the data into the buffer
 			err := json.NewEncoder(requestBodyBuffer).Encode(tc.userPayload)
 			if err != nil {
 				t.Fatalf("error encoding user payload: %v", err)
 			}
 
-			// 3. Simulate browser request and server response
+			// Simulate browser request and server response
 			w := httptest.NewRecorder()
 			// Pass the buffer (which is an io.Reader) into the request
 			r := httptest.NewRequest(http.MethodPost, route, requestBodyBuffer)
 			r.Header.Set("Content-Type", "application/json")
 
-			// ----------------
-			// --- RESPONSE ---
-			// ----------------
+			// Execute request and record response
+			handlers.HandleCreateUser(mockStore).ServeHTTP(w, r)
 
-			// 1. Call Create User Handler
-			handler := handlers.HandleCreateUser(&mockStore)
-			handler.ServeHTTP(w, r)
-
-			// 2. Assertions
+			// Assertions
 			assertCode(t, tc.expectedCode, w.Code)
 			tc.assert(t, w)
 		})
