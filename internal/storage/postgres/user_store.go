@@ -21,7 +21,7 @@ func NewPostgreSQLUserStore(db *sql.DB) *PostgreSQLUserStore {
 	}
 }
 
-func (s *PostgreSQLUserStore) GetUser(name string) (domain.User, error) {
+func (s *PostgreSQLUserStore) GetUser(name string) (*domain.User, error) {
 	// sqlc-generated queries require a context parameter
 	ctx := context.Background()
 
@@ -29,13 +29,13 @@ func (s *PostgreSQLUserStore) GetUser(name string) (domain.User, error) {
 	dbUser, err := s.queries.GetUser(ctx, name)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.User{}, domain.ErrUserNotFound
+			return &domain.User{}, domain.ErrUserNotFound
 		}
-		return domain.User{}, fmt.Errorf("get user %q: %w", name, err)
+		return &domain.User{}, fmt.Errorf("get user %q: %w", name, err)
 	}
 
 	// 2. Map the database model directly to the pure domain entity
-	return domain.User{
+	return &domain.User{
 		ID:           dbUser.ID,
 		Username:     dbUser.Username,
 		Email:        dbUser.Email,
@@ -83,4 +83,8 @@ func (s *PostgreSQLUserStore) CreateUser(user *domain.User) error {
 	// row perfectly before the function finishes.
 	user.CreatedAt = dbUser.CreatedAt
 	return nil
+}
+
+func (s *PostgreSQLUserStore) VerifyCredentials(email, password string) (int64, error) {
+	return 0, nil
 }

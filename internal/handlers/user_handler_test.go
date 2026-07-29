@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yudan-glitch/twitter-backend/internal/auth"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 	"github.com/yudan-glitch/twitter-backend/internal/handlers"
 	"github.com/yudan-glitch/twitter-backend/internal/storage/mock"
@@ -103,12 +104,12 @@ func TestHandleGetSpecificUser(t *testing.T) {
 // --- Create User ---
 
 type userPayloadBuilder struct {
-	payload handlers.UserRequest
+	payload handlers.RegisterRequest
 }
 
 func newUserPayloadBuilder() *userPayloadBuilder {
 	return &userPayloadBuilder{
-		payload: handlers.UserRequest{
+		payload: handlers.RegisterRequest{
 			Username: "user_02",
 			Email:    "user@mail.com",
 			Password: "123abc",
@@ -128,7 +129,7 @@ func (b *userPayloadBuilder) withPassword(p string) *userPayloadBuilder {
 	b.payload.Password = p
 	return b
 }
-func (b *userPayloadBuilder) build() handlers.UserRequest {
+func (b *userPayloadBuilder) build() handlers.RegisterRequest {
 	return b.payload
 }
 
@@ -137,7 +138,7 @@ func TestHandleCreateUser(t *testing.T) {
 	// Define multiple test cases (Table-Driven Test)
 	tests := []struct {
 		name         string
-		userPayload  handlers.UserRequest
+		userPayload  handlers.RegisterRequest
 		expectedCode int
 		assert       func(t *testing.T, w *httptest.ResponseRecorder)
 	}{
@@ -195,6 +196,24 @@ func TestHandleCreateUser(t *testing.T) {
 			expectedCode: http.StatusBadRequest,
 			assert:       assertErrorResponse(handlers.ErrInvalidPassword),
 		},
+		{
+			name:         "(6a) Empty field: username",
+			userPayload:  newUserPayloadBuilder().withUsername("").build(),
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidUsername),
+		},
+		{
+			name:         "(6b) Empty field: email",
+			userPayload:  newUserPayloadBuilder().withEmail("").build(),
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidEmail),
+		},
+		{
+			name:         "(6c) Empty field: password",
+			userPayload:  newUserPayloadBuilder().withPassword("").build(),
+			expectedCode: http.StatusBadRequest,
+			assert:       assertErrorResponse(handlers.ErrInvalidPassword),
+		},
 	}
 
 	// Contstruct full versioned API path
@@ -217,18 +236,11 @@ func TestHandleCreateUser(t *testing.T) {
 				},
 			}
 
-			// Create a buffer to hold the encoded JSON bytes
-			requestBodyBuffer := new(bytes.Buffer)
-
-			// Encode the data into the buffer
-			err := json.NewEncoder(requestBodyBuffer).Encode(tc.userPayload)
-			if err != nil {
-				t.Fatalf("error encoding user payload: %v", err)
-			}
-
-			// Simulate browser request and server response
+			// Prepare Server Response
 			w := httptest.NewRecorder()
-			// Pass the buffer (which is an io.Reader) into the request
+
+			// Simulate Browser Request
+			requestBodyBuffer := encodePayload(t, tc.userPayload)
 			r := httptest.NewRequest(http.MethodPost, route, requestBodyBuffer)
 			r.Header.Set("Content-Type", "application/json")
 
@@ -274,4 +286,137 @@ func TestHandleCreateUser_PayloadLimits(t *testing.T) {
 		assertCode(t, http.StatusBadRequest, w.Code)
 		assertErrorResponse(handlers.ErrUnknownFields)(t, w)
 	})
+}
+
+// --- LOGIN ---
+func TestHandleLogin(t *testing.T) {
+
+	tests := []struct {
+		name         string
+		loginPayload handlers.LoginRequest
+		expectedCode int
+		mockFail     bool // tell the mock to fail for a specific test
+	}{
+		{
+			name: "Unknown Email",
+			loginPayload: handlers.LoginRequest{
+				Email:    "unknown@mail.com",
+				Password: "password", // Doesn't matter, the account doesn't exist anyway.
+			},
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "Existing Email, Wrong Password",
+			loginPayload: handlers.LoginRequest{
+				Email:    "user@mail.com",
+				Password: "wrong_password",
+			},
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "Existing Email, Right Password",
+			loginPayload: handlers.LoginRequest{
+				Email:    "user@mail.com",
+				Password: "right_password",
+			},
+			expectedCode: http.StatusOK,
+		},
+		{
+			name: "Session Store Error",
+			loginPayload: handlers.LoginRequest{
+				Email:    "user@mail.com",
+				Password: "right_password",
+			},
+			expectedCode: http.StatusInternalServerError,
+			mockFail:     true,
+		},
+	}
+
+	mockPasword := "right_password"
+	hashedMockPassword, _ := auth.HashPassword(mockPasword)
+
+	mockStore := &mock.MockUserStore{
+		Users: map[string]domain.User{
+			"user": {
+				ID:           1,
+				Username:     "user",
+				Email:        "user@mail.com",
+				PasswordHash: hashedMockPassword,
+				CreatedAt:    time.Now(),
+			},
+		},
+	}
+
+	mockSessionStore := &mock.MockSessionStore{}
+
+	route := apiVersion + "/login"
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			// Set the failure state (I might have to move this test on a new
+			// function, I don't like this current approach)
+			mockSessionStore.FailCreate = tc.mockFail
+
+			// Prepare server response
+			w := httptest.NewRecorder()
+
+			// Simulate browser request
+			requestBodyBuffer := encodePayload(t, tc.loginPayload)
+			r := httptest.NewRequest(http.MethodPost, route, requestBodyBuffer)
+			r.Header.Set("Content-Type", "application/json")
+
+			// Execute request
+			handlers.HandleLoginRequest(mockStore, mockSessionStore).ServeHTTP(w, r)
+
+			// Assertions
+			assertCode(t, tc.expectedCode, w.Code)
+
+			// If Login Successful, i MUST have a session cookie
+			if tc.expectedCode == http.StatusOK {
+				assertCookie(t, w, "session_id")
+			}
+		})
+	}
+}
+
+func assertCookie(t *testing.T, w *httptest.ResponseRecorder, name string) {
+	t.Helper()
+
+	cookies := w.Result().Cookies()
+
+	for _, c := range cookies {
+		if c.Name == name {
+			// Check security attributes
+			if c.Value == "" {
+				t.Errorf("cookie %s found but value is empty", name)
+			}
+			if !c.HttpOnly {
+				t.Errorf("cookie %s should be HttpOnly", name)
+			}
+			if !c.Secure {
+				t.Errorf("cookie %s should be Secure", name)
+			}
+			if c.SameSite != http.SameSiteLaxMode {
+				t.Errorf("cookie %s should have SameSite=Lax", name)
+			}
+			return
+		}
+	}
+	t.Error("expected session cookie 'session_id' but it was not found")
+}
+
+func encodePayload(t *testing.T, payload any) *bytes.Buffer {
+	t.Helper()
+
+	// Create a buffer to hold the encoded JSON bytes
+	requestBodyBuffer := new(bytes.Buffer)
+
+	// Encode the data into the buffer
+	err := json.NewEncoder(requestBodyBuffer).Encode(payload)
+	if err != nil {
+		t.Fatalf("error encoding user payload\n%v", err)
+	}
+
+	return requestBodyBuffer
 }

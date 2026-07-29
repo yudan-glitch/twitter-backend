@@ -66,7 +66,7 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 			}
 
 			if err == nil {
-				assertUserMatches(t, &tc.expectedUser, &stored)
+				assertUserMatches(t, &tc.expectedUser, stored)
 			}
 		})
 	}
@@ -133,7 +133,7 @@ func TestPostgreSQLUserStore_CreateUser_Success(t *testing.T) {
 					t.Fatalf("get user: bad return error\nExpecting nil\nGot %v", err)
 				}
 
-				assertUserMatches(t, &tc.inputUser, &stored)
+				assertUserMatches(t, &tc.inputUser, stored)
 			}
 		})
 	}

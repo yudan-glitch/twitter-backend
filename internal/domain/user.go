@@ -29,6 +29,7 @@ var (
 
 // UserStore provides access to user data (implemented by both the real DB and testing mocks).
 type UserStore interface {
-	GetUser(name string) (User, error)
+	GetUser(name string) (*User, error)
 	CreateUser(user *User) error
+	VerifyCredentials(email, password string) (int64, error)
 }

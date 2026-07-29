@@ -3,7 +3,9 @@ package mock
 import (
 	"time"
 
+	"github.com/yudan-glitch/twitter-backend/internal/auth"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
+	"github.com/yudan-glitch/twitter-backend/internal/handlers"
 )
 
 // Note: This uses the core domain.User entity layout instead of handlers.UserResponse
@@ -14,12 +16,12 @@ type MockUserStore struct {
 }
 
 // GetUser looks up the user in the mock map, returning a 404 error if missing.
-func (m *MockUserStore) GetUser(name string) (domain.User, error) {
+func (m *MockUserStore) GetUser(name string) (*domain.User, error) {
 	user, exist := m.Users[name]
 	if !exist {
-		return domain.User{}, domain.ErrUserNotFound
+		return &domain.User{}, domain.ErrUserNotFound
 	}
-	return user, nil
+	return &user, nil
 }
 
 func (m *MockUserStore) CreateUser(user *domain.User) error {
@@ -45,4 +47,30 @@ func (m *MockUserStore) CreateUser(user *domain.User) error {
 	// Save the copy directly into the in-memory key-value dictionary
 	m.Users[user.Username] = *user
 	return nil
+}
+
+func (m *MockUserStore) VerifyCredentials(email, password string) (userId int64, err error) {
+
+	var targetUser *domain.User
+
+	// Check for user with provided email
+	for _, user := range m.Users {
+		if user.Email == email {
+			targetUser = &user
+			break
+		}
+	}
+
+	// No users with provided email
+	if targetUser == nil {
+		return 0, handlers.ErrInvalidLoginCredentials
+	}
+
+	// Verify the passwords match
+	if !auth.VerifyPassword(password, targetUser.PasswordHash) {
+		return 0, handlers.ErrInvalidLoginCredentials
+	}
+
+	// Login Success
+	return targetUser.ID, nil
 }

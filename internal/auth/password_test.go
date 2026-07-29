@@ -21,12 +21,12 @@ func TestPasswordHashing(t *testing.T) {
 	}
 
 	// 2. Test Verification (Correct Password)
-	if !auth.CheckPasswordHash(password, hash) {
+	if !auth.VerifyPassword(password, hash) {
 		t.Error("CheckPasswordHash should return true for correct password")
 	}
 
 	// 3. Test Verification (Wrong Password)
-	if auth.CheckPasswordHash("wrong-password", hash) {
+	if auth.VerifyPassword("wrong-password", hash) {
 		t.Error("CheckPasswordHash should return false for incorrect password")
 	}
 }

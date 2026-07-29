@@ -14,6 +14,7 @@ import (
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 )
 
+// Errors
 var (
 	ErrInvalidUsername = errors.New("invalid username")
 	ErrInvalidEmail    = errors.New("invalid email")
@@ -24,6 +25,8 @@ var (
 
 	// ErrUnknownFields is returned when the JSON contains fields not in the DTO.
 	ErrUnknownFields = errors.New("request body contains unknown fields")
+
+	ErrInvalidLoginCredentials = errors.New("invalid login request credentials")
 )
 
 // Regex Breakdown:
@@ -40,8 +43,13 @@ type UserResponse struct {
 	Username string `json:"username"`
 }
 
-type UserRequest struct {
+type RegisterRequest struct {
 	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -111,32 +119,9 @@ func HandleGetSpecificUser(store domain.UserStore) http.HandlerFunc {
 func HandleCreateUser(store domain.UserStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Limit the size of the request body to prevent DOS
-		r.Body = http.MaxBytesReader(w, r.Body, int64(maxRequestBodySize))
-
-		// Decode user payload
-		var incomingUserData UserRequest
-		decoder := json.NewDecoder(r.Body)
-		// Prevent DOS via unknown large fields
-		decoder.DisallowUnknownFields()
-
-		err := decoder.Decode(&incomingUserData)
-		if err != nil {
-			var maxBytesErr *http.MaxBytesError
-			if errors.As(err, &maxBytesErr) {
-				// Internal: http.MaxBytesError -> Client: ErrPayloadTooLarge
-				respondWithError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge)
-				return
-			}
-
-			// Check if error is due to DisallowUnknownFields
-			if strings.Contains(err.Error(), "unknown field") {
-				respondWithError(w, http.StatusBadRequest, ErrUnknownFields)
-				return
-			}
-
-			respondWithError(w, http.StatusBadRequest, err)
-			return
+		incomingUserData, ok := decodeJSONPayload[RegisterRequest](w, r, maxRequestBodySize)
+		if !ok {
+			return // Error response was already sent by the helper
 		}
 
 		// Payload Validation:
@@ -195,6 +180,81 @@ func HandleCreateUser(store domain.UserStore) http.HandlerFunc {
 	}
 }
 
+func HandleLoginRequest(store domain.UserStore, sessionStore domain.SessionStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Decode Login Payload
+		loginRequestData, ok := decodeJSONPayload[LoginRequest](w, r, maxRequestBodySize)
+		if !ok {
+			return // Error response was already sent by the helper
+		}
+
+		// Verify Login Credentials
+		userID, err := store.VerifyCredentials(loginRequestData.Email, loginRequestData.Password)
+
+		// Login Fail
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, err)
+			return
+		}
+
+		// Create Session
+		// Set 24-hour duration for now
+		session, err := sessionStore.CreateSession(userID)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		// Set the "session_id" cookie that the test is looking for
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_id",
+			Value:    session.ID,
+			Path:     "/",
+			Expires:  session.ExpiresAt,
+			HttpOnly: true,                 // Prevent XSS
+			Secure:   true,                 // Only send over HTTPS
+			SameSite: http.SameSiteLaxMode, // CSRF protection
+		})
+
+		// Send success response
+		respondWithJSON(w, http.StatusOK, map[string]string{"message": "Login successful"})
+
+	}
+}
+
+func decodeJSONPayload[T any](w http.ResponseWriter, r *http.Request, maxRequestBodySize int) (T, bool) {
+	// Limit the size of the request body to prevent DOS
+	r.Body = http.MaxBytesReader(w, r.Body, int64(maxRequestBodySize))
+
+	// Decode user payload
+	var payload T
+	decoder := json.NewDecoder(r.Body)
+	// Prevent DOS via unknown large fields
+	decoder.DisallowUnknownFields()
+
+	err := decoder.Decode(&payload)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			// Internal: http.MaxBytesError -> Client: ErrPayloadTooLarge
+			respondWithError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge)
+			return payload, false
+		}
+
+		// Check if error is due to DisallowUnknownFields
+		if strings.Contains(err.Error(), "unknown field") {
+			respondWithError(w, http.StatusBadRequest, ErrUnknownFields)
+			return payload, false
+		}
+
+		respondWithError(w, http.StatusBadRequest, err)
+		return payload, false
+	}
+
+	return payload, true
+}
+
 // respondWithError builds a standardized JSON error message and writes it to the response stream.
 func respondWithError(w http.ResponseWriter, statusCode int, err error) {
 	// Set headers and encode the actual struct to JSON
@@ -220,13 +280,17 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, response any) {
 // GetClientErrorMessage translates internal backend errors to user-friendly strings.
 func GetClientErrorMessage(err error) string {
 	switch {
-	// User Request Fields
+	// Registration Request Fields
 	case errors.Is(err, ErrInvalidUsername):
 		return "The username must be between 4 and 15 characters long. Please provide a valid username."
 	case errors.Is(err, ErrInvalidEmail):
 		return "Invalid email. Please try again with a different email."
 	case errors.Is(err, ErrInvalidPassword):
 		return "Password must contain at least 6 characters. Please try again with a different password."
+
+	// Login Request
+	case errors.Is(err, ErrInvalidLoginCredentials):
+		return "Invalid email or password"
 
 	// Payload
 	case errors.Is(err, ErrPayloadTooLarge):

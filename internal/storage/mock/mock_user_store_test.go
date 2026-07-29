@@ -58,7 +58,7 @@ func TestMockUserStore_GetUser(t *testing.T) {
 			}
 
 			if err == nil {
-				assertUserMatches(t, &tc.expectedUser, &stored)
+				assertUserMatches(t, &tc.expectedUser, stored)
 			}
 		})
 	}
@@ -127,7 +127,7 @@ func TestMockUserStore_CreateUser(t *testing.T) {
 				if err != nil {
 					t.Errorf("get user: bad return error\nExpected %v\nGot %v", nil, err)
 				}
-				assertUserMatches(t, &tc.input, &stored)
+				assertUserMatches(t, &tc.input, stored)
 			}
 		})
 	}
