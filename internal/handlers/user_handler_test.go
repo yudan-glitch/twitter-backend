@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yudan-glitch/twitter-backend/internal/auth"
+	"github.com/yudan-glitch/twitter-backend/internal/crypto"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 	"github.com/yudan-glitch/twitter-backend/internal/handlers"
 	"github.com/yudan-glitch/twitter-backend/internal/storage/mock"
@@ -333,7 +333,7 @@ func TestHandleLogin(t *testing.T) {
 	}
 
 	mockPasword := "right_password"
-	hashedMockPassword, _ := auth.HashPassword(mockPasword)
+	hashedMockPassword, _ := crypto.HashPassword(mockPasword)
 
 	mockStore := &mock.MockUserStore{
 		Users: map[string]domain.User{

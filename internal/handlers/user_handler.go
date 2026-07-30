@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/yudan-glitch/twitter-backend/internal/auth"
+	"github.com/yudan-glitch/twitter-backend/internal/crypto"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 )
 
@@ -144,7 +144,7 @@ func HandleCreateUser(store domain.UserStore) http.HandlerFunc {
 		}
 
 		// Hash password before creating domain User
-		hashedPassword, err := auth.HashPassword(incomingUserData.Password)
+		hashedPassword, err := crypto.HashPassword(incomingUserData.Password)
 		if err != nil {
 			respondWithError(w, http.StatusInternalServerError, err)
 			return

@@ -1,9 +1,9 @@
-package auth_test
+package crypto_test
 
 import (
 	"testing"
 
-	"github.com/yudan-glitch/twitter-backend/internal/auth"
+	"github.com/yudan-glitch/twitter-backend/internal/crypto"
 )
 
 func TestPasswordHashing(t *testing.T) {
@@ -11,7 +11,7 @@ func TestPasswordHashing(t *testing.T) {
 	password := "1234"
 
 	// 1. Test Hashing
-	hash, err := auth.HashPassword(password)
+	hash, err := crypto.HashPassword(password)
 	if err != nil {
 		t.Fatalf("failed to hash password\n%v", err)
 	}
@@ -21,12 +21,12 @@ func TestPasswordHashing(t *testing.T) {
 	}
 
 	// 2. Test Verification (Correct Password)
-	if !auth.VerifyPassword(password, hash) {
+	if !crypto.VerifyPassword(password, hash) {
 		t.Error("CheckPasswordHash should return true for correct password")
 	}
 
 	// 3. Test Verification (Wrong Password)
-	if auth.VerifyPassword("wrong-password", hash) {
+	if crypto.VerifyPassword("wrong-password", hash) {
 		t.Error("CheckPasswordHash should return false for incorrect password")
 	}
 }

@@ -3,7 +3,7 @@ package mock
 import (
 	"time"
 
-	"github.com/yudan-glitch/twitter-backend/internal/auth"
+	"github.com/yudan-glitch/twitter-backend/internal/crypto"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 	"github.com/yudan-glitch/twitter-backend/internal/handlers"
 )
@@ -67,7 +67,7 @@ func (m *MockUserStore) VerifyCredentials(email, password string) (userId int64,
 	}
 
 	// Verify the passwords match
-	if !auth.VerifyPassword(password, targetUser.PasswordHash) {
+	if !crypto.VerifyPassword(password, targetUser.PasswordHash) {
 		return 0, handlers.ErrInvalidLoginCredentials
 	}
 
