@@ -25,9 +25,12 @@ var (
 
 	// ErrUnknownFields is returned when the JSON contains fields not in the DTO.
 	ErrUnknownFields = errors.New("request body contains unknown fields")
-
-	ErrInvalidLoginCredentials = errors.New("invalid login request credentials")
 )
+
+// ErrorResponse represents the standardized JSON structure for all API errors.
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
 
 // Regex Breakdown:
 // ^[a-zA-Z0-9]      -> Must start with 1 alphanumeric character
@@ -289,7 +292,7 @@ func GetClientErrorMessage(err error) string {
 		return "Password must contain at least 6 characters. Please try again with a different password."
 
 	// Login Request
-	case errors.Is(err, ErrInvalidLoginCredentials):
+	case errors.Is(err, domain.ErrInvalidLoginCredentials):
 		return "Invalid email or password"
 
 	// Payload

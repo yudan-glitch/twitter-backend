@@ -14,7 +14,7 @@ test:
 # Automatically migrates the test DB up, runs tests (verbose flag)
 test-v:
 	migrate -path db/migrations -database "$(TEST_DATABASE_URL)" up
-	go test -v ./internal/storage/postgres
+	go test -v -coverpkg=./internal/storage/postgres ./internal/storage/postgres
 
 # These targets are dedicated to the main development database
 migrate-up:

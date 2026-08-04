@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
+	"github.com/yudan-glitch/twitter-backend/internal/crypto"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 )
 
@@ -86,5 +87,23 @@ func (s *PostgreSQLUserStore) CreateUser(user *domain.User) error {
 }
 
 func (s *PostgreSQLUserStore) VerifyCredentials(email, password string) (int64, error) {
-	return 0, nil
+	ctx := context.Background()
+
+	// Query the database for the user by email.
+	user, err := s.queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, domain.ErrUserNotFound
+		}
+		return 0, fmt.Errorf("verify credentials: %w", err)
+	}
+
+	// The password check (bcrypt) happens here, but actually I don't think this is good
+	// practice. The storage layer should only worry about data retrieval. I should
+	// create a Service layer (domain) instead.
+	if !crypto.VerifyPassword(password, user.PasswordHash) {
+		return 0, domain.ErrInvalidLoginCredentials
+	}
+
+	return user.ID, nil
 }

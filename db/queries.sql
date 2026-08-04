@@ -8,3 +8,8 @@ LIMIT 1;
 INSERT INTO users (username, email, password_hash)
 VALUES ($1, $2, $3)
 RETURNING id, username, email, password_hash, created_at;
+
+-- name: GetUserByEmail :one
+SELECT id, password_hash
+FROM users
+WHERE email = $1;

@@ -27,8 +27,8 @@ func (s *SessionStore) CreateSession(userID int64) (*domain.Session, error) {
 	}
 
 	// 2. Set default session duration (24 hours)
-	expiresAt := time.Now().Add(24 * time.Hour)
 	createdAt := time.Now()
+	expiresAt := createdAt.Add(24 * time.Hour)
 
 	// 3. Insert session into PostgreSQL
 	query := `
@@ -40,10 +40,12 @@ func (s *SessionStore) CreateSession(userID int64) (*domain.Session, error) {
 		return nil, fmt.Errorf("failed to insert session into database: %w", err)
 	}
 
+	// 4. Return the newly created session
 	return &domain.Session{
 		ID:        sessionID,
 		UserID:    userID,
 		ExpiresAt: expiresAt,
+		CreatedAt: createdAt,
 	}, nil
 }
 

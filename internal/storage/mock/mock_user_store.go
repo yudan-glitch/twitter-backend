@@ -5,7 +5,6 @@ import (
 
 	"github.com/yudan-glitch/twitter-backend/internal/crypto"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
-	"github.com/yudan-glitch/twitter-backend/internal/handlers"
 )
 
 // Note: This uses the core domain.User entity layout instead of handlers.UserResponse
@@ -63,12 +62,12 @@ func (m *MockUserStore) VerifyCredentials(email, password string) (userId int64,
 
 	// No users with provided email
 	if targetUser == nil {
-		return 0, handlers.ErrInvalidLoginCredentials
+		return 0, domain.ErrInvalidLoginCredentials
 	}
 
 	// Verify the passwords match
 	if !crypto.VerifyPassword(password, targetUser.PasswordHash) {
-		return 0, handlers.ErrInvalidLoginCredentials
+		return 0, domain.ErrInvalidLoginCredentials
 	}
 
 	// Login Success

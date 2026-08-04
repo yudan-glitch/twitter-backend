@@ -16,9 +16,10 @@ type User struct {
 
 // Core business errors
 var (
-	ErrUserNotFound  = errors.New("user not found")
-	ErrUsernameTaken = errors.New("username already taken")
-	ErrEmailTaken    = errors.New("email already registered")
+	ErrUserNotFound            = errors.New("user not found")
+	ErrUsernameTaken           = errors.New("username already taken")
+	ErrEmailTaken              = errors.New("email already registered")
+	ErrInvalidLoginCredentials = errors.New("invalid login request credentials")
 )
 
 // Create a blueprint (an interface) of what the database should do

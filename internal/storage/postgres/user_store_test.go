@@ -6,20 +6,21 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
+	"github.com/yudan-glitch/twitter-backend/internal/crypto"
 	"github.com/yudan-glitch/twitter-backend/internal/domain"
 	"github.com/yudan-glitch/twitter-backend/internal/storage/postgres"
 )
 
 func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 
-	db, store := setupTestDB(t)
+	db, store := setupTestUserDB(t)
 	// Good practice to close it once done
 	defer db.Close()
 
 	tests := []struct {
 		name           string
 		lookupUsername string
-		expectedUser   domain.User
+		expectedUser   *domain.User
 		expectedErr    error
 	}{
 		{
@@ -31,11 +32,11 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 		{
 			name:           "(2) Request existing user",
 			lookupUsername: "alice",
-			expectedUser: domain.User{
+			expectedUser: &domain.User{
 				ID:           1,
 				Username:     "alice",
 				Email:        "alice@example.com",
-				PasswordHash: "1234",
+				PasswordHash: "secret_hash",
 				// CreatedAt doesn't really matter here.
 				// "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP" automatically
 				// sets a time when the row gets inserted. So this value will never be zero.
@@ -45,7 +46,7 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 	}
 
 	// Seed a real row into PostgreSQL
-	_, err := db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "alice", "alice@example.com", "1234")
+	_, err := db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "alice", "alice@example.com", "secret_hash")
 	if err != nil {
 		t.Fatalf("failed to seed test user\n%v", err)
 	}
@@ -66,7 +67,7 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 			}
 
 			if err == nil {
-				assertUserMatches(t, &tc.expectedUser, stored)
+				assertUserMatches(t, tc.expectedUser, stored)
 			}
 		})
 	}
@@ -74,7 +75,7 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 
 func TestPostgreSQLUserStore_CreateUser_Success(t *testing.T) {
 
-	db, store := setupTestDB(t)
+	db, store := setupTestUserDB(t)
 	// Good practice to close it once done
 	defer db.Close()
 
@@ -139,7 +140,61 @@ func TestPostgreSQLUserStore_CreateUser_Success(t *testing.T) {
 	}
 }
 
-func setupTestDB(t testing.TB) (*sql.DB, *postgres.PostgreSQLUserStore) {
+func TestPostgreSQLUserStore_VerifyCredentials(t *testing.T) {
+	db, store := setupTestUserDB(t)
+	defer db.Close()
+
+	// Define db for testing
+	hashedPassword, err := crypto.HashPassword("correct_password")
+	if err != nil {
+		t.Fatalf("error hashing password\n%v", err)
+	}
+	_, err = db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "verify_me", "verify@mail.com", hashedPassword)
+	if err != nil {
+		t.Fatalf("failed to seed test user\n%v", err)
+	}
+
+	tests := []struct {
+		name          string
+		inputEmail    string
+		inputPassword string
+		expectedErr   error
+	}{
+		{
+			name:          "Unknown Email",
+			inputEmail:    "unknown@mail.com",
+			inputPassword: "any_password",
+			expectedErr:   domain.ErrUserNotFound,
+		},
+		{
+			name:          "Valid Credentials",
+			inputEmail:    "verify@mail.com",
+			inputPassword: "correct_password",
+			expectedErr:   nil,
+		},
+		{
+			name:          "Wrong Password",
+			inputEmail:    "verify@mail.com",
+			inputPassword: "wrong_password",
+			expectedErr:   domain.ErrInvalidLoginCredentials,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			userID, err := store.VerifyCredentials(tc.inputEmail, tc.inputPassword)
+			if err != tc.expectedErr {
+				t.Fatalf("bad error response:\nExpected: %v\nGot: %v", tc.expectedErr, err)
+			}
+
+			if err == nil && userID == 0 {
+				t.Error("expected non-zero userID for successful verification")
+			}
+		})
+	}
+}
+
+func setupTestUserDB(t testing.TB) (*sql.DB, *postgres.PostgreSQLUserStore) {
 	t.Helper()
 
 	// STEP. 1
