@@ -3,7 +3,7 @@ package crypto_test
 import (
 	"testing"
 
-	"github.com/yudan-glitch/twitter-backend/internal/crypto"
+	"github.com/solid-state-dan/twitter-backend/internal/crypto"
 )
 
 func TestPasswordHashing(t *testing.T) {

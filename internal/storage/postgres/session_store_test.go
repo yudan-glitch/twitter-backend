@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yudan-glitch/twitter-backend/internal/storage/postgres"
+	"github.com/solid-state-dan/twitter-backend/internal/storage/postgres"
 )
 
 func TestCreateSession(t *testing.T) {

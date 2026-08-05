@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yudan-glitch/twitter-backend/internal/domain"
-	"github.com/yudan-glitch/twitter-backend/internal/storage/mock"
+	"github.com/solid-state-dan/twitter-backend/internal/domain"
+	"github.com/solid-state-dan/twitter-backend/internal/storage/mock"
 )
 
 func TestMockUserStore_GetUser(t *testing.T) {

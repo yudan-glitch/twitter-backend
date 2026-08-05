@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/yudan-glitch/twitter-backend/internal/handlers"
+	"github.com/solid-state-dan/twitter-backend/internal/handlers"
 )
 
 // assertCode checks that the response code matches the expected value.

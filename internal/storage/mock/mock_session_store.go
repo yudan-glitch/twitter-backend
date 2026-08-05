@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/yudan-glitch/twitter-backend/internal/domain"
+	"github.com/solid-state-dan/twitter-backend/internal/domain"
 )
 
 type MockSessionStore struct {

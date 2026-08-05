@@ -1,4 +1,4 @@
-module github.com/yudan-glitch/twitter-backend
+module github.com/solid-state-dan/twitter-backend
 
 go 1.26.5
 

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/yudan-glitch/twitter-backend/internal/handlers"
-	"github.com/yudan-glitch/twitter-backend/internal/storage/postgres"
+	"github.com/solid-state-dan/twitter-backend/internal/handlers"
+	"github.com/solid-state-dan/twitter-backend/internal/storage/postgres"
 
 	_ "github.com/lib/pq"
 )

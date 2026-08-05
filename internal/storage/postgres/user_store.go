@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
-	"github.com/yudan-glitch/twitter-backend/internal/crypto"
-	"github.com/yudan-glitch/twitter-backend/internal/domain"
+	"github.com/solid-state-dan/twitter-backend/internal/crypto"
+	"github.com/solid-state-dan/twitter-backend/internal/domain"
 )
 
 type PostgreSQLUserStore struct {

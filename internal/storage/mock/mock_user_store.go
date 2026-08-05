@@ -3,8 +3,8 @@ package mock
 import (
 	"time"
 
-	"github.com/yudan-glitch/twitter-backend/internal/crypto"
-	"github.com/yudan-glitch/twitter-backend/internal/domain"
+	"github.com/solid-state-dan/twitter-backend/internal/crypto"
+	"github.com/solid-state-dan/twitter-backend/internal/domain"
 )
 
 // Note: This uses the core domain.User entity layout instead of handlers.UserResponse
