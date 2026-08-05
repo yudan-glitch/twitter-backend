@@ -39,7 +39,7 @@ func main() {
 	// 2. Loop through and execute parameterized inserts
 	for _, u := range usersToSeed {
 		query := `
-			INSERT INTO users (username, email) 
+			INSERT INTO user_account (username, email) 
 			VALUES ($1, $2) 
 			ON CONFLICT (username) DO NOTHING
 		`

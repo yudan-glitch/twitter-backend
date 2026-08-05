@@ -46,18 +46,18 @@ func TestPostgreSQLUserStore_GetUser(t *testing.T) {
 	}
 
 	// Seed a real row into PostgreSQL
-	_, err := db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "alice", "alice@example.com", "secret_hash")
+	_, err := db.Exec("INSERT INTO user_account (username, email, password_hash) VALUES ($1, $2, $3)", "alice", "alice@example.com", "secret_hash")
 	if err != nil {
 		t.Fatalf("failed to seed test user\n%v", err)
 	}
 
 	// // DEBUG
 	// var count int
-	// err = db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	// err = db.QueryRow("SELECT COUNT(*) FROM user_account").Scan(&count)
 	// if err != nil {
 	// 	t.Fatalf("failed to query count: %v", err)
 	// }
-	// log.Printf("--- REAL-TIME DB CHECK: There are currently %d users in the table", count)
+	// log.Printf("--- REAL-TIME DB CHECK: There are currently %d user accounts in the table", count)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestPostgreSQLUserStore_CreateUser_Success(t *testing.T) {
 	defer db.Close()
 
 	// Define db for testing
-	_, err := db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "unique", "unique@example.com", "secret_hash")
+	_, err := db.Exec("INSERT INTO user_account (username, email, password_hash) VALUES ($1, $2, $3)", "unique", "unique@example.com", "secret_hash")
 	if err != nil {
 		t.Fatalf("failed to seed test user\n%v", err)
 	}
@@ -149,7 +149,7 @@ func TestPostgreSQLUserStore_VerifyCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error hashing password\n%v", err)
 	}
-	_, err = db.Exec("INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)", "verify_me", "verify@mail.com", hashedPassword)
+	_, err = db.Exec("INSERT INTO user_account (username, email, password_hash) VALUES ($1, $2, $3)", "verify_me", "verify@mail.com", hashedPassword)
 	if err != nil {
 		t.Fatalf("failed to seed test user\n%v", err)
 	}
@@ -213,11 +213,11 @@ func setupTestUserDB(t testing.TB) (*sql.DB, *postgres.PostgreSQLUserStore) {
 		t.Fatalf("failed to connect to test db: %v", err)
 	}
 
-	// Clean users table from previous tests
-	_, err = db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+	// Clean user_account table from previous tests
+	_, err = db.Exec("TRUNCATE TABLE user_account RESTART IDENTITY CASCADE")
 	if err != nil {
 		db.Close()
-		t.Fatalf("failed to truncate users table: %v", err)
+		t.Fatalf("failed to truncate user_account table: %v", err)
 	}
 
 	store := postgres.NewPostgreSQLUserStore(db)

@@ -32,7 +32,7 @@ func (s *SessionStore) CreateSession(userID int64) (*domain.Session, error) {
 
 	// 3. Insert session into PostgreSQL
 	query := `
-		INSERT INTO sessions (id, user_id, expires_at, created_at)
+		INSERT INTO session (id, user_id, expires_at, created_at)
 		VALUES ($1, $2, $3, $4)
 	`
 	_, err = s.db.Exec(query, sessionID, userID, expiresAt, createdAt)

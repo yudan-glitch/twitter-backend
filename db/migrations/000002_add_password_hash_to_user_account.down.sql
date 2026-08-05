@@ -1,2 +1,2 @@
-ALTER TABLE users
+ALTER TABLE user_account
 DROP COLUMN password_hash;

@@ -15,7 +15,7 @@ type Session struct {
 	CreatedAt time.Time
 }
 
-type User struct {
+type UserAccount struct {
 	ID           int64
 	Username     string
 	Email        string

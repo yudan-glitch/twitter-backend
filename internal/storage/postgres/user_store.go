@@ -58,10 +58,10 @@ func (s *PostgreSQLUserStore) CreateUser(user *domain.User) error {
 		// Catch driver-specific error constraints
 		pqErr, ok := err.(*pq.Error)
 		if ok && pqErr.Code == "23505" {
-			if strings.Contains(pqErr.Message, "users_username_key") {
+			if strings.Contains(pqErr.Message, "user_account_username_key") {
 				return domain.ErrUsernameTaken
 			}
-			if strings.Contains(pqErr.Message, "users_email_key") {
+			if strings.Contains(pqErr.Message, "user_account_email_key") {
 				return domain.ErrEmailTaken
 			}
 		}

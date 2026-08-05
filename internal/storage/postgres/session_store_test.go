@@ -39,7 +39,7 @@ func TestCreateSession(t *testing.T) {
 
 // Different from setup test user store
 // 1. return session store
-// 2. truncate sessions table
+// 2. truncate session table
 func setupTestSessionDB(t testing.TB) (*sql.DB, *postgres.SessionStore) {
 	t.Helper()
 
@@ -55,11 +55,11 @@ func setupTestSessionDB(t testing.TB) (*sql.DB, *postgres.SessionStore) {
 		t.Fatalf("failed to connect to test db: %v", err)
 	}
 
-	// Clean sessions table from previous tests
-	_, err = db.Exec("TRUNCATE TABLE sessions RESTART IDENTITY CASCADE")
+	// Clean session table from previous tests
+	_, err = db.Exec("TRUNCATE TABLE session RESTART IDENTITY CASCADE")
 	if err != nil {
 		db.Close()
-		t.Fatalf("failed to truncate sessions table: %v", err)
+		t.Fatalf("failed to truncate session table: %v", err)
 	}
 
 	store := postgres.NewSessionStore(db)
